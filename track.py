@@ -23,7 +23,23 @@ import numpy as np
 
 
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
+point1, point2, point3, point4 = 0, 0, 0, 0
 
+up_status, down_staus = False, False
+def draw_rectangle(event, x, y, flags, im0):
+    global ix, iy
+    global up_status, down_staus
+    global point1, point2, point3, point4
+    if event == cv2.EVENT_LBUTTONDOWN:
+        print('buttom down')
+        ix, iy = x, y
+        point1, point2 = x, y
+        up_status = True
+    if event == cv2.EVENT_LBUTTONUP:
+        print('bottom up')
+        # cv2.rectangle(im0, (ix, iy), (x, y), (0, 0, 255), 4)
+        point3, point4 = x, y
+        down_staus = True
 
 def xyxy_to_xywh(*xyxy):
     """" Calculates the relative bounding box from absolute pixel values. """
@@ -58,7 +74,9 @@ def compute_color_for_labels(label):
     return tuple(color)
 
 
-def draw_boxes(img, bbox, track_status, identities=None, offset=(0, 0)):
+def draw_boxes(img, bbox, track_status, pre_alone_num, identities=None, offset=(0, 0)):
+    global up_status, down_staus
+    global point1, point2, point3, point4
     pre_frame_id = track_status['pre_frame_id']
     current_frame_id = []
     center_points = []
@@ -92,7 +110,7 @@ def draw_boxes(img, bbox, track_status, identities=None, offset=(0, 0)):
             start_point = track_status['center_points'][id][0]
             for i in range(1, len(track_status['center_points'][id])):
                 points = track_status['center_points'][id][i]
-                cv2.line(img, start_point, points, color, 4)
+                cv2.line(img, tuple(start_point), tuple(points), color, 4)
                 start_point = points
 
     center_points = np.array(center_points)
@@ -102,12 +120,15 @@ def draw_boxes(img, bbox, track_status, identities=None, offset=(0, 0)):
 
     distance = np.sqrt(np.sum(np.power(center_points_1 - center_points_2, 2), axis=1))
     distance = distance.reshape(n, n)
+    distance[range(n), range(n)] = 1000000  #将对角线元素设置为很大
 
-
+    # print('distance: ', distance)
+    # print('*'*100)
     judge_array = np.full((n, n), 100) # 判断像素距离大于100的，为单独行走的人
-    alone_num = np.sum(np.sum(distance < judge_array, 1) == n)
+    alone_num = np.sum(np.sum(distance > judge_array, 1) == n)
 
-    text5 = 'Number of people walking alone: {}\n ' \
+
+    text5 = 'Number of people walking alone: {}; ' \
             'Number of people walking in groups: {}'.format(alone_num, n - alone_num)
 
     if pre_frame_id:
@@ -120,6 +141,18 @@ def draw_boxes(img, bbox, track_status, identities=None, offset=(0, 0)):
     else:
         text3 = 'Number of people coming in: {}'.format(len(current_frame_id))
         text4 = 'Number of people leaving: {}'.format(0)
+        pre_alone_num = alone_num
+
+
+    if abs(pre_alone_num - alone_num) > 3:
+        text7 = 'Crowd Generation / Crowd destruction Occurs!'
+    else:
+        text7 = 'No Crowd Generation / Crowd destruction Occurs!'
+    color7 = compute_color_for_labels(7)
+    t_size = cv2.getTextSize(text7, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
+    cv2.rectangle(img, (100, 700 + t_size[1] + 4), (100 + t_size[0] + 3, 700 + t_size[1] + 4), color7, -1)
+    cv2.putText(img, text7, (100, 700 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
+
     track_status['pre_frame_id'] = current_frame_id
 
     text1 = 'Current Frame People Num: {}'.format(len(identities))
@@ -148,8 +181,22 @@ def draw_boxes(img, bbox, track_status, identities=None, offset=(0, 0)):
     t_size = cv2.getTextSize(text5, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
     cv2.rectangle(img, (100, 500 + t_size[1] + 4), (100 + t_size[0] + 3, 500 + t_size[1] + 4), color5, -1)
     cv2.putText(img, text5, (100, 500 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
-
-    return img, track_status
+    print(up_status, down_staus, point1, point2, point3, point4)
+    print('*'*100)
+    if up_status and down_staus:
+        cv2.rectangle(img, (point1, point2), (point3, point4), color5, 4)
+        # up_status, down_staus = False, False
+        m1 = center_points >= [point1, point2]
+        m2 = center_points <= [point3, point4]
+        m = np.hstack((m1, m2))
+        num = np.sum(np.sum(m, axis=1) == 4)
+        text6 = 'There are {} people within the rectangle'.format(num)
+        color6 = compute_color_for_labels(6)
+        t_size = cv2.getTextSize(text6, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
+        cv2.rectangle(img, (100, 600 + t_size[1] + 4), (100 + t_size[0] + 3, 600 + t_size[1] + 4), color6, -1)
+        cv2.putText(img, text6, (100, 600 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
+    pre_alone_num = alone_num
+    return img, track_status, pre_alone_num
 
 
 def detect(opt):
@@ -207,7 +254,7 @@ def detect(opt):
     txt_path = str(Path(out)) + '/results.txt'
 
     track_status = {'center_points': {}, 'pre_frame_id': []}
-
+    cv2.namedWindow('image')
     for frame_idx, (path, img, im0s, vid_cap) in enumerate(dataset):
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -224,8 +271,10 @@ def detect(opt):
             pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         t2 = time_synchronized()
 
+        pre_alone_num = 0
         # Process detections
         for i, det in enumerate(pred):  # detections per image
+            global im0
             if webcam:  # batch_size >= 1
                 p, s, im0 = path[i], '%g: ' % i, im0s[i].copy()
             else:
@@ -265,7 +314,7 @@ def detect(opt):
                 if len(outputs) > 0:
                     bbox_xyxy = outputs[:, :4]
                     identities = outputs[:, -1]
-                    _, track_status = draw_boxes(im0, bbox_xyxy, track_status, identities)
+                    _, track_status, pre_alone_num = draw_boxes(im0, bbox_xyxy, track_status, pre_alone_num, identities)
                     # to MOT format
                     tlwh_bboxs = xyxy_to_tlwh(bbox_xyxy)
 
@@ -289,7 +338,10 @@ def detect(opt):
 
             # Stream results
             if show_vid:
-                cv2.imshow(p, im0)
+                # cv2.imshow(p, im0)
+                cv2.setMouseCallback('image', draw_rectangle, im0)
+                cv2.imshow('image', im0)
+
                 if cv2.waitKey(1) == ord('q'):  # q to quit
                     raise StopIteration
 
