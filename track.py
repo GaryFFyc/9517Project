@@ -23,14 +23,14 @@ import numpy as np
 
 
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
-point1, point2, point3, point4 = 0, 0, 0, 0
+point1, point2, point3, point4 = 0, 0, 0, 0  
 
-up_status, down_staus = False, False
-def draw_rectangle(event, x, y, flags, im0):
+up_status, down_staus = False, False 
+def draw_rectangle(event, x, y, flags, im0):  
     global ix, iy
     global up_status, down_staus
     global point1, point2, point3, point4
-    if event == cv2.EVENT_LBUTTONDOWN:
+    if event == cv2.EVENT_LBUTTONDOWN:  
         print('buttom down')
         ix, iy = x, y
         point1, point2 = x, y
@@ -40,6 +40,13 @@ def draw_rectangle(event, x, y, flags, im0):
         # cv2.rectangle(im0, (ix, iy), (x, y), (0, 0, 255), 4)
         point3, point4 = x, y
         down_staus = True
+
+def draw_text(img, text, x, y, step, color_num):
+    color = compute_color_for_labels(color_num)
+    t_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
+    cv2.rectangle(img, (x, y + t_size[1] + 4), (x + t_size[0] + 3, y + t_size[1] + 4), color, -1)
+    cv2.putText(img, text, (x, y + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
+    return img, x, y + step
 
 def xyxy_to_xywh(*xyxy):
     """" Calculates the relative bounding box from absolute pixel values. """
@@ -120,16 +127,16 @@ def draw_boxes(img, bbox, track_status, pre_alone_num, identities=None, offset=(
 
     distance = np.sqrt(np.sum(np.power(center_points_1 - center_points_2, 2), axis=1))
     distance = distance.reshape(n, n)
-    distance[range(n), range(n)] = 1000000  #将对角线元素设置为很大
+    distance[range(n), range(n)] = 1000000  
 
     # print('distance: ', distance)
     # print('*'*100)
-    judge_array = np.full((n, n), 100) # 判断像素距离大于100的，为单独行走的人
+    judge_array = np.full((n, n), 100) 
     alone_num = np.sum(np.sum(distance > judge_array, 1) == n)
 
 
-    text5 = 'Number of people walking alone: {}; ' \
-            'Number of people walking in groups: {}'.format(alone_num, n - alone_num)
+    text5_1 = 'Number of people walking alone: {}'.format(alone_num)
+    text5_2 = 'Number of people walking in groups: {}'.format(n - alone_num)
 
     if pre_frame_id:
         exist_id = set(pre_frame_id) & set(current_frame_id)
@@ -137,65 +144,49 @@ def draw_boxes(img, bbox, track_status, pre_alone_num, identities=None, offset=(
         coming_num = len(current_frame_id) - len(exist_id)
         text3 = 'Number of people coming in: {}'.format(coming_num)
         text4 = 'Number of people leaving: {}'.format(leaving_num)
+        # print('pre_alone_num: {}, alone_num: {}'.format(pre_alone_num, alone_num))
+        if pre_alone_num > alone_num:
+            text7 = 'Crowd Generation Occurs!'
+            text8 = 'Crowd destruction!'
+        else:
+            text7 = 'Crowd Generation!'
+            text8 = 'Crowd destruction Occurs!'
+
+        pre_alone_num = alone_num
 
     else:
         text3 = 'Number of people coming in: {}'.format(len(current_frame_id))
         text4 = 'Number of people leaving: {}'.format(0)
+        text7 = 'Crowd Generation!'
+        text8 = 'Crowd destruction!'
         pre_alone_num = alone_num
 
-
-    if abs(pre_alone_num - alone_num) > 3:
-        text7 = 'Crowd Generation / Crowd destruction Occurs!'
-    else:
-        text7 = 'No Crowd Generation / Crowd destruction Occurs!'
-    color7 = compute_color_for_labels(7)
-    t_size = cv2.getTextSize(text7, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-    cv2.rectangle(img, (100, 700 + t_size[1] + 4), (100 + t_size[0] + 3, 700 + t_size[1] + 4), color7, -1)
-    cv2.putText(img, text7, (100, 700 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
 
     track_status['pre_frame_id'] = current_frame_id
 
     text1 = 'Current Frame People Num: {}'.format(len(identities))
-    color1 = compute_color_for_labels(1)
-    t_size = cv2.getTextSize(text1, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-    cv2.rectangle(img, (100, 100 + t_size[1] + 4), (100 + t_size[0] + 3, 100 + t_size[1] + 4), color1, -1)
-    cv2.putText(img, text1, (100, 100 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
 
     text2 = 'Tracking Total People Num: {}'.format(len(track_status['center_points'].keys()))
-    color2 = compute_color_for_labels(2)
-    t_size = cv2.getTextSize(text2, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-    cv2.rectangle(img, (100, 200 + t_size[1] + 4), (100 + t_size[0] + 3, 200 + t_size[1] + 4), color2, -1)
-    cv2.putText(img, text2, (100, 200 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
 
-    color3 = compute_color_for_labels(3)
-    t_size = cv2.getTextSize(text3, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-    cv2.rectangle(img, (100, 300 + t_size[1] + 4), (100 + t_size[0] + 3, 300 + t_size[1] + 4), color3, -1)
-    cv2.putText(img, text3, (100, 300 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
-
-    color4 = compute_color_for_labels(4)
-    t_size = cv2.getTextSize(text4, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-    cv2.rectangle(img, (100, 400 + t_size[1] + 4), (100 + t_size[0] + 3, 400 + t_size[1] + 4), color4, -1)
-    cv2.putText(img, text4, (100, 400 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
-
-    color5 = compute_color_for_labels(5)
-    t_size = cv2.getTextSize(text5, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-    cv2.rectangle(img, (100, 500 + t_size[1] + 4), (100 + t_size[0] + 3, 500 + t_size[1] + 4), color5, -1)
-    cv2.putText(img, text5, (100, 500 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
-    print(up_status, down_staus, point1, point2, point3, point4)
-    print('*'*100)
+    x, y, step = 50, 50, 50
+    img, x, y = draw_text(img, text1, x, y, step, 1)
+    img, x, y = draw_text(img, text2, x, y, step, 2)
+    img, x, y = draw_text(img, text3, x, y, step, 3)
+    img, x, y = draw_text(img, text4, x, y, step, 4)
+    img, x, y = draw_text(img, text5_1, x, y, step, 5)
+    img, x, y = draw_text(img, text5_2, x, y, step, 5)
+    img, x, y = draw_text(img, text7, x, y, step, 7)
+    img, x, y = draw_text(img, text8, x, y, step, 8)
     if up_status and down_staus:
-        cv2.rectangle(img, (point1, point2), (point3, point4), color5, 4)
+        cv2.rectangle(img, (point1, point2), (point3, point4), (0, 0, 255), 4)
         # up_status, down_staus = False, False
         m1 = center_points >= [point1, point2]
         m2 = center_points <= [point3, point4]
         m = np.hstack((m1, m2))
         num = np.sum(np.sum(m, axis=1) == 4)
         text6 = 'There are {} people within the rectangle'.format(num)
-        color6 = compute_color_for_labels(6)
-        t_size = cv2.getTextSize(text6, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-        cv2.rectangle(img, (100, 600 + t_size[1] + 4), (100 + t_size[0] + 3, 600 + t_size[1] + 4), color6, -1)
-        cv2.putText(img, text6, (100, 600 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
-    pre_alone_num = alone_num
+        img, x, y = draw_text(img, text6, x, y, step, 6)
+
     return img, track_status, pre_alone_num
 
 
@@ -218,9 +209,9 @@ def detect(opt):
     # Initialize
     device = select_device(opt.device)
     if os.path.exists(out):
-        shutil.rmtree(out)  # delete output folder
-    os.makedirs(out)  # make new output folder
-    half = device.type != 'cpu'  # half precision only supported on CUDA
+        shutil.rmtree(out) 
+    os.makedirs(out)  
+    half = device.type != 'cpu'  
 
     # Load model
     model = attempt_load(yolo_weights, map_location=device)  # load FP32 model
@@ -253,6 +244,7 @@ def detect(opt):
     save_path = str(Path(out))
     txt_path = str(Path(out)) + '/results.txt'
 
+    pre_alone_num = 0
     track_status = {'center_points': {}, 'pre_frame_id': []}
     cv2.namedWindow('image')
     for frame_idx, (path, img, im0s, vid_cap) in enumerate(dataset):
@@ -271,7 +263,6 @@ def detect(opt):
             pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         t2 = time_synchronized()
 
-        pre_alone_num = 0
         # Process detections
         for i, det in enumerate(pred):  # detections per image
             global im0
@@ -364,7 +355,7 @@ def detect(opt):
 
     if save_txt or save_vid:
         print('Results saved to %s' % os.getcwd() + os.sep + out)
-        if platform == 'darwin':  # MacOS
+        if platform == 'darwin':  
             os.system('open ' + save_path)
 
     print('Done. (%.3fs)' % (time.time() - t0))
